@@ -1,0 +1,25 @@
+{
+  "name": "@emdzej/j2534-webusb",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@emdzej/j2534-types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/w3c-web-usb": "^1.0.14",
+    "typescript": "^5.7.0"
+  }
+}
