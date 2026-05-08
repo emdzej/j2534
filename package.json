@@ -6,7 +6,12 @@
     "build": "turbo build",
     "dev": "turbo dev",
     "lint": "turbo lint",
-    "clean": "turbo clean"
+    "clean": "turbo clean",
+    "example:canlogger": "pnpm --filter @emdzej/j2534-example-canlogger start",
+    "example:klogger": "pnpm --filter @emdzej/j2534-example-klogger start",
+    "example:innomts": "pnpm --filter @emdzej/j2534-example-innomts start",
+    "example:inspector-web": "pnpm --filter @emdzej/j2534-inspector-web dev",
+    "example:inspector-cli": "pnpm --filter @emdzej/j2534-inspector-cli start"
   },
   "devDependencies": {
     "turbo": "^2.3.0",

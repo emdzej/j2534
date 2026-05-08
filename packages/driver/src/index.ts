@@ -12,6 +12,7 @@ import {
   IoctlId,
   ConnectFlag,
   J2534Error,
+  RxStatus,
   Pin,
   VOLTAGE_OFF,
   SHORT_TO_GROUND,
@@ -32,6 +33,8 @@ import {
   buildFiveBaudInitCmd,
   MessageQueue,
   parseResponse,
+  parseAllPackets,
+  PacketType,
   type DeviceResponse,
 } from "@emdzej/j2534-core";
 
@@ -51,6 +54,15 @@ export interface ChannelState {
   filters: Map<number, FilterState>;
   rxQueue: MessageQueue;
   functionalAddresses: FunctionalAddress[];
+  /**
+   * Pending K-line message being assembled across multiple packets.
+   * K-line messages arrive as: START_IND → NORM_MSG/LB_MSG (data) → END_IND (timestamp)
+   * Data is accumulated here until the END_IND arrives.
+   */
+  pendingMsg: {
+    data: number[];
+    rxStatus: number;
+  } | null;
 }
 
 export interface FilterState {
@@ -103,16 +115,31 @@ export class J2534Device {
   async passThruOpen(): Promise<number> {
     await this.transport.open();
 
-    // Send identification command
-    await this.transport.write(encodeCommand("ati"));
-    const resp = await this.readResponse();
+    // Send identification command with flush prefix (matches Tactrix SDK: "\r\n\r\nati\r\n")
+    const atiCmd = new TextEncoder().encode("\r\n\r\nati\r\n");
+    await this.transport.write(atiCmd);
+
+    // The flush prefix may produce extra responses; drain until we get the version
+    let resp: DeviceResponse;
+    do {
+      const raw = await this.transport.read(2000);
+      resp = parseResponse(raw, Protocol.CAN);
+    } while (resp.type !== "version" && resp.type !== "unknown");
+
     if (resp.type === "version") {
       this.firmwareVersion = resp.firmware;
     }
 
     // Attach
     await this.transport.write(encodeCommand("ata"));
-    const ack = await this.readResponse();
+
+    // Drain responses until we get the ack (may receive a stale version echo first)
+    let ack: DeviceResponse;
+    do {
+      const raw = await this.transport.read(2000);
+      ack = parseResponse(raw, Protocol.CAN);
+    } while (ack.type !== "ack" && ack.type !== "unknown");
+
     if (ack.type !== "ack") {
       throw this.setError(J2534Error.ERR_FAILED, "Device did not acknowledge open");
     }
@@ -174,6 +201,7 @@ export class J2534Device {
       filters: new Map(),
       rxQueue: new MessageQueue(),
       functionalAddresses: [],
+      pendingMsg: null,
     });
 
     return channelId;
@@ -208,10 +236,8 @@ export class J2534Device {
 
     const deadline = Date.now() + timeout;
     while (ch.rxQueue.length < numMsgs && Date.now() < deadline) {
-      await this.pollOnce(ch);
-      if (ch.rxQueue.length < numMsgs) {
-        await sleep(Math.min(this.pollInterval, deadline - Date.now()));
-      }
+      const remaining = Math.max(1, deadline - Date.now());
+      await this.pollOnce(ch, Math.min(remaining, 50));
     }
 
     if (ch.rxQueue.isEmpty) {
@@ -403,6 +429,22 @@ export class J2534Device {
     }
   }
 
+  // ─── readPinVoltage ────────────────────────────────────────────────
+
+  /**
+   * Read the current voltage on a given OBD-II pin (in millivolts).
+   * Uses the Tactrix "atr <pin>" command.
+   */
+  async readPinVoltage(pin: number): Promise<number> {
+    this.assertOpen();
+    await this.transport.write(buildReadVoltageCmd(pin));
+    const resp = await this.readResponse();
+    if (resp.type === "voltage") {
+      return resp.millivolts;
+    }
+    throw this.setError(J2534Error.ERR_FAILED, `Failed to read voltage on pin ${pin}`);
+  }
+
   // ─── PassThruReadVersion ────────────────────────────────────────
 
   async passThruReadVersion(): Promise<VersionInfo> {
@@ -451,6 +493,8 @@ export class J2534Device {
           await this.transport.write(
             buildSetConfigCmd(ch.channelByte, cfg.parameter, cfg.value)
           );
+          // Consume the ack so it doesn't pollute the rx buffer
+          await this.readResponse();
         }
         return;
       }
@@ -640,24 +684,99 @@ export class J2534Device {
     }
   }
 
-  private async pollOnce(ch: ChannelState): Promise<void> {
+  private isKLine(protocol: Protocol | number): boolean {
+    return protocol === Protocol.ISO9141 || protocol === Protocol.ISO14230;
+  }
+
+  private async pollOnce(ch: ChannelState, readTimeout = 1): Promise<void> {
     try {
-      const buf = await this.transport.read(1);
-      if (buf.length > 0) {
-        const resp = parseResponse(buf, ch.protocol as Protocol);
-        if (resp.type === "message") {
-          // Apply functional address filtering if table is populated
-          if (ch.functionalAddresses.length > 0) {
-            if (this.matchesFunctionalAddress(ch, resp.msg)) {
-              ch.rxQueue.push(resp.msg);
+      const buf = await this.transport.read(readTimeout);
+      if (buf.length === 0) return;
+
+      const responses = parseAllPackets(buf, ch.protocol as Protocol);
+
+      for (const resp of responses) {
+        if (resp.type !== "message") continue;
+
+        const msg = resp.msg;
+        const kLine = this.isKLine(ch.protocol);
+
+        if (kLine) {
+          // K-line multi-packet assembly (matches C driver logic):
+          //
+          // NORM_MSG_START_IND (0x80) / TX_LB_START_IND (0xA0):
+          //   Start indication — resets the pending accumulator.
+          //   Not delivered to rxQueue (internal framing only).
+          //
+          // NORM_MSG (0x00) / TX_LB_MSG (0x20):
+          //   Data packet — accumulate bytes into pending message.
+          //   No timestamp on K-line data packets.
+          //
+          // RX_MSG_END_IND (0x40) / LB_MSG_END_IND (0x60):
+          //   End indication — finalize pending message with timestamp
+          //   and deliver the assembled message to rxQueue.
+          //
+          // TX_DONE (0x10):
+          //   TX confirmation — not delivered (internal framing only).
+
+          // Determine packet type from rxStatus flags
+          const isTx = (msg.rxStatus & RxStatus.TX_MSG_TYPE) !== 0;
+          const isStart = (msg.rxStatus & RxStatus.START_OF_MESSAGE) !== 0;
+
+          if (isStart) {
+            // Start indication — reset accumulator, do NOT enqueue
+            ch.pendingMsg = {
+              data: [],
+              rxStatus: isTx ? RxStatus.TX_MSG_TYPE : 0,
+            };
+          } else if (msg.dataSize > 0 && msg.timestamp === 0) {
+            // Data packet (NORM_MSG or TX_LB_MSG) — accumulate
+            if (!ch.pendingMsg) {
+              ch.pendingMsg = {
+                data: [],
+                rxStatus: isTx ? RxStatus.TX_MSG_TYPE : 0,
+              };
             }
+            for (let i = 0; i < msg.dataSize; i++) {
+              ch.pendingMsg.data.push(msg.data[i]);
+            }
+          } else if (msg.dataSize === 0 && msg.timestamp !== 0 && !isStart) {
+            // End indication (RX_MSG_END_IND or LB_MSG_END_IND or TX_DONE)
+            // Finalize the pending message
+            if (ch.pendingMsg && ch.pendingMsg.data.length > 0) {
+              const finalData = new Uint8Array(ch.pendingMsg.data);
+              this.enqueueMsg(ch, {
+                protocolId: ch.protocol as Protocol,
+                rxStatus: ch.pendingMsg.rxStatus,
+                txFlags: 0,
+                timestamp: msg.timestamp,
+                dataSize: finalData.length,
+                extraDataIndex: finalData.length,
+                data: finalData,
+              });
+            }
+            ch.pendingMsg = null;
           } else {
-            ch.rxQueue.push(resp.msg);
+            // Fallback — deliver as-is
+            this.enqueueMsg(ch, msg);
           }
+        } else {
+          // CAN/ISO15765: each packet is self-contained with timestamp
+          this.enqueueMsg(ch, msg);
         }
       }
     } catch {
       // timeout or no data — expected
+    }
+  }
+
+  private enqueueMsg(ch: ChannelState, msg: PassThruMsg): void {
+    if (ch.functionalAddresses.length > 0) {
+      if (this.matchesFunctionalAddress(ch, msg)) {
+        ch.rxQueue.push(msg);
+      }
+    } else {
+      ch.rxQueue.push(msg);
     }
   }
 

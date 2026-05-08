@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleGetInfoString</key>
+	<string>Prevents macOS CDC ACM driver from claiming Tactrix OpenPort 2.0</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.emdzej.TactrixOpenPortExclusion</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>TactrixOpenPortExclusion</string>
+	<key>CFBundlePackageType</key>
+	<string>KEXT</string>
+	<key>CFBundleVersion</key>
+	<string>1.0.0</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+	<key>OSBundleRequired</key>
+	<string>Safe Boot</string>
+	<key>IOKitPersonalities</key>
+	<dict>
+		<key>TactrixOpenPort2_Exclusion</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>com.apple.kpi.iokit</string>
+			<key>IOClass</key>
+			<string>IOService</string>
+			<key>IOProviderClass</key>
+			<string>IOUSBHostDevice</string>
+			<key>idVendor</key>
+			<integer>1027</integer>
+			<key>idProduct</key>
+			<integer>52301</integer>
+			<key>IOProbeScore</key>
+			<integer>100000</integer>
+			<key>bConfigurationValue</key>
+			<integer>1</integer>
+		</dict>
+	</dict>
+</dict>
+</plist>

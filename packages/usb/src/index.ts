@@ -41,19 +41,32 @@ export class NodeUsbTransport implements Transport {
     this.device = device;
     this.device.open();
 
-    // Claim interface 0
-    const iface = this.device.interface(0);
-    if (iface.isKernelDriverActive()) {
-      iface.detachKernelDriver();
-    }
-    iface.claim();
+    // Find the interface with exactly 2 bulk endpoints (the data interface).
+    // The OpenPort 2.0 is a CDC device — interface 0 is control (interrupt),
+    // interface 1 is data (bulk IN + bulk OUT).
+    const config = this.device.configDescriptor!;
+    let claimedIface: number | null = null;
 
-    // Find bulk endpoints
-    for (const ep of iface.endpoints) {
-      if (ep.direction === "in" && ep.transferType === usb.LIBUSB_TRANSFER_TYPE_BULK) {
-        this.inEndpoint = ep as InEndpoint;
-      } else if (ep.direction === "out" && ep.transferType === usb.LIBUSB_TRANSFER_TYPE_BULK) {
-        this.outEndpoint = ep as OutEndpoint;
+    for (let i = 0; i < config.interfaces.length; i++) {
+      const iface = this.device.interface(i);
+      const bulkEps = iface.endpoints.filter(
+        (ep) => ep.transferType === usb.LIBUSB_TRANSFER_TYPE_BULK
+      );
+      if (bulkEps.length === 2) {
+        if (iface.isKernelDriverActive()) {
+          iface.detachKernelDriver();
+        }
+        iface.claim();
+        this.claimedInterface = i;
+
+        for (const ep of bulkEps) {
+          if (ep.direction === "in") {
+            this.inEndpoint = ep as InEndpoint;
+          } else {
+            this.outEndpoint = ep as OutEndpoint;
+          }
+        }
+        break;
       }
     }
 
@@ -64,10 +77,14 @@ export class NodeUsbTransport implements Transport {
     this._isConnected = true;
   }
 
+  private claimedInterface: number | null = null;
+
   async close(): Promise<void> {
     if (this.device) {
       try {
-        this.device.interface(0).release();
+        if (this.claimedInterface !== null) {
+          this.device.interface(this.claimedInterface).release();
+        }
       } catch {
         // ignore
       }
@@ -76,6 +93,7 @@ export class NodeUsbTransport implements Transport {
     }
     this.inEndpoint = null;
     this.outEndpoint = null;
+    this.claimedInterface = null;
     this._isConnected = false;
   }
 

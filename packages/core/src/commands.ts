@@ -18,6 +18,10 @@ export function protocolToChannelByte(protocol: Protocol | number): number {
     case Protocol.ISO15765:
       return 0x36;
     // Tactrix J2534-2 extended channel IDs
+    case 0x00009000: // CAN_CH1
+      return 0x35;
+    case 0x00009040: // ISO15765_CH1
+      return 0x36;
     case 0x00009080: // J1850VPW_CH1
       return 0x31;
     case 0x00009160: // J1850PWM_CH1
@@ -46,10 +50,11 @@ export function encodeCommand(
 ): Uint8Array {
   const cmdBytes = new TextEncoder().encode(command);
   if (!payload || payload.length === 0) {
-    // Command + \r terminator
-    const buf = new Uint8Array(cmdBytes.length + 1);
+    // Command + \r\n terminator
+    const buf = new Uint8Array(cmdBytes.length + 2);
     buf.set(cmdBytes);
     buf[cmdBytes.length] = 0x0d; // \r
+    buf[cmdBytes.length + 1] = 0x0a; // \n
     return buf;
   }
   // Command + space + payload (no terminator needed for binary payloads)
@@ -82,13 +87,13 @@ export function buildCloseChannelCmd(channelByte: number): Uint8Array {
 
 /**
  * Build the "att" (transmit) command with message payload.
- * Format: att<channelByte> <dataSize> <txFlags>\r <data bytes>
+ * Format: att<channelByte> <dataSize> <txFlags>\r\n <data bytes>
  */
 export function buildTransmitCmd(
   channelByte: number,
   msg: PassThruMsg
 ): Uint8Array {
-  const header = `att${String.fromCharCode(channelByte)} ${msg.dataSize} ${msg.txFlags}\r`;
+  const header = `att${String.fromCharCode(channelByte)} ${msg.dataSize} ${msg.txFlags}\r\n`;
   const headerBytes = new TextEncoder().encode(header);
   const buf = new Uint8Array(headerBytes.length + msg.dataSize);
   buf.set(headerBytes);
@@ -98,7 +103,7 @@ export function buildTransmitCmd(
 
 /**
  * Build the "atf" (set filter) command.
- * Format: atf<channelByte> <filterType> <txFlags> <dataSize>\r <mask><pattern>[<flowControl>]
+ * Format: atf<channelByte> <filterType> <txFlags> <dataSize>\r\n <mask><pattern>[<flowControl>]
  */
 export function buildFilterCmd(
   channelByte: number,
@@ -109,7 +114,7 @@ export function buildFilterCmd(
   flowControl?: Uint8Array
 ): Uint8Array {
   const dataSize = mask.length;
-  const header = `atf${String.fromCharCode(channelByte)} ${filterType} ${txFlags} ${dataSize}\r`;
+  const header = `atf${String.fromCharCode(channelByte)} ${filterType} ${txFlags} ${dataSize}\r\n`;
   const headerBytes = new TextEncoder().encode(header);
   const payloadSize =
     dataSize * 2 + (flowControl ? flowControl.length : 0);
@@ -173,7 +178,7 @@ export function buildFastInitCmd(
   channelByte: number,
   data: Uint8Array
 ): Uint8Array {
-  const header = `aty${String.fromCharCode(channelByte)} ${data.length} 0\r`;
+  const header = `aty${String.fromCharCode(channelByte)} ${data.length} 0\r\n`;
   const headerBytes = new TextEncoder().encode(header);
   const buf = new Uint8Array(headerBytes.length + data.length);
   buf.set(headerBytes);
@@ -196,14 +201,14 @@ export function buildSetVoltageCmd(
  * Build five-baud init command.
  * The OpenPort 2.0 firmware handles 5-baud init via the aty command
  * with special timing parameters set beforehand (W0-W5).
- * Format: aty<channelByte> <addrLen> 1\r <address byte>
+ * Format: aty<channelByte> <addrLen> 1\r\n <address byte>
  * The '1' flag distinguishes 5-baud from fast init ('0').
  */
 export function buildFiveBaudInitCmd(
   channelByte: number,
   targetAddress: number
 ): Uint8Array {
-  const header = `aty${String.fromCharCode(channelByte)} 1 1\r`;
+  const header = `aty${String.fromCharCode(channelByte)} 1 1\r\n`;
   const headerBytes = new TextEncoder().encode(header);
   const buf = new Uint8Array(headerBytes.length + 1);
   buf.set(headerBytes);

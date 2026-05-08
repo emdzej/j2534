@@ -15,14 +15,14 @@
 import { appendFileSync, writeFileSync } from "node:fs";
 import { Command } from "commander";
 import chalk from "chalk";
-import { Protocol, FilterType, ConfigParam, IoctlId } from "@emdzej/j2534-types";
+import { Protocol, FilterType, ConfigParam, IoctlId, ProtocolExt } from "@emdzej/j2534-types";
 import { J2534Device, createMsg } from "@emdzej/j2534-driver";
 import { NodeUsbTransport } from "@emdzej/j2534-usb";
 
 // Tactrix extensions: channel selection
 const ISO9141_K = Protocol.ISO9141;
-const ISO9141_L = 0x0101 as Protocol; // Tactrix extension
-const ISO9141_INNO = 0x0102 as Protocol; // AUX 2.5mm jack
+const ISO9141_L = ProtocolExt.ISO9141_L as unknown as Protocol;
+const ISO9141_INNO = ProtocolExt.ISO9141_INNO as unknown as Protocol;
 
 // Parity values
 const PARITY_NONE = 0;
