@@ -66,15 +66,22 @@ export function encodeCommand(
 
 /**
  * Build the "ato" (open channel) command.
- * Format: ato<channelByte> <flags(4bytes)> <baud(4bytes)> 0\r
+ * Format: ato<channelByte> <flags> <baud> 0 <seq>\r\n
+ *
+ * The trailing `<seq>` is a per-device monotonically-incrementing
+ * uint16 (wraps `0xFFFF → 1`). Tactrix's reference DLL emits it on
+ * every AT command; firmware appears to tolerate its absence but
+ * including it matches the reference implementation and gives us
+ * future-compatible request/response correlation.
  */
 export function buildOpenChannelCmd(
   protocol: Protocol,
   flags: number,
-  baudRate: number
+  baudRate: number,
+  seq = 0
 ): Uint8Array {
   const channelByte = protocolToChannelByte(protocol);
-  const cmd = `ato${String.fromCharCode(channelByte)} ${flags} ${baudRate} 0`;
+  const cmd = `ato${String.fromCharCode(channelByte)} ${flags} ${baudRate} 0 ${seq}`;
   return encodeCommand(cmd);
 }
 
@@ -87,13 +94,29 @@ export function buildCloseChannelCmd(channelByte: number): Uint8Array {
 
 /**
  * Build the "att" (transmit) command with message payload.
- * Format: att<channelByte> <dataSize> <txFlags>\r\n <data bytes>
+ * Format: att<channelByte> <dataSize> <txFlags> <timeoutMicros> <seq>\r\n<data bytes>
+ *
+ * `<timeoutMicros>` tells the OpenPort firmware how long to wait for
+ * the ECU's response after the wire-side TX completes. Omitting it
+ * makes the firmware fall back to a very short internal default —
+ * fine for fast ECUs (engine, transmission) whose responses land
+ * within ~25ms, but it makes the firmware silently drop replies
+ * from slow ECUs (BMW cluster / IKE / body modules doing EEPROM
+ * reads, ~50-200ms). The Tactrix reference DLL uses 1_000_000us =
+ * 1s as the default for ISO9141 / ISO14230 (verified via Ghidra of
+ * `op20pt32.dll`'s FUN_65aeab40 + FUN_65ae7750 protocol mapping).
+ *
+ * `<seq>` is the per-device monotonic counter — matches Tactrix's
+ * always-emitted trailing field. Pass `0` to use the firmware
+ * default (no correlation expected).
  */
 export function buildTransmitCmd(
   channelByte: number,
-  msg: PassThruMsg
+  msg: PassThruMsg,
+  timeoutMicros = 1_000_000,
+  seq = 0
 ): Uint8Array {
-  const header = `att${String.fromCharCode(channelByte)} ${msg.dataSize} ${msg.txFlags}\r\n`;
+  const header = `att${String.fromCharCode(channelByte)} ${msg.dataSize} ${msg.txFlags} ${timeoutMicros} ${seq}\r\n`;
   const headerBytes = new TextEncoder().encode(header);
   const buf = new Uint8Array(headerBytes.length + msg.dataSize);
   buf.set(headerBytes);
@@ -143,24 +166,28 @@ export function buildStopFilterCmd(
 
 /**
  * Build "atg" (get config) command.
+ * Format: atg<channelByte> <paramId> <seq>\r\n
  */
 export function buildGetConfigCmd(
   channelByte: number,
-  paramId: number
+  paramId: number,
+  seq = 0
 ): Uint8Array {
-  return encodeCommand(`atg${String.fromCharCode(channelByte)} ${paramId}`);
+  return encodeCommand(`atg${String.fromCharCode(channelByte)} ${paramId} ${seq}`);
 }
 
 /**
  * Build "ats" (set config) command.
+ * Format: ats<channelByte> <paramId> <value> <seq>\r\n
  */
 export function buildSetConfigCmd(
   channelByte: number,
   paramId: number,
-  value: number
+  value: number,
+  seq = 0
 ): Uint8Array {
   return encodeCommand(
-    `ats${String.fromCharCode(channelByte)} ${paramId} ${value}`
+    `ats${String.fromCharCode(channelByte)} ${paramId} ${value} ${seq}`
   );
 }
 

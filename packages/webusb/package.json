@@ -1,6 +1,6 @@
 {
   "name": "@emdzej/j2534-webusb",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Browser WebUSB API transport for @emdzej/j2534-driver. Talks to the Tactrix OpenPort 2.0 directly from Chrome/Edge — no native dependencies, runs in any modern Chromium-based browser.",
   "keywords": [
     "j2534",

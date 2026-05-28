@@ -1,6 +1,6 @@
 {
   "name": "@emdzej/j2534-usb",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Node.js libusb bulk-endpoint transport for @emdzej/j2534-driver. Talks directly to the Tactrix OpenPort 2.0 (VID 0x0403 / PID 0xCC4D) bypassing the kernel CDC ACM driver. Requires elevated privileges on macOS/Linux.",
   "keywords": [
     "j2534",

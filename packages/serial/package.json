@@ -1,6 +1,6 @@
 {
   "name": "@emdzej/j2534-serial",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Node.js CDC ACM serial transport for @emdzej/j2534-driver. Talks to the Tactrix OpenPort 2.0 via /dev/cu.usbmodem* (macOS) / /dev/ttyACM* (Linux) / COMx (Windows) — no sudo required.",
   "keywords": [
     "j2534",

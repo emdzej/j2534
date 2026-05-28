@@ -1,6 +1,6 @@
 {
   "name": "@emdzej/j2534-driver",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "J2534Device — full SAE J2534 PassThru API implementation for Tactrix OpenPort 2.0. Supports CAN (11/29-bit), ISO 15765 (ISO-TP / UDS), ISO 9141 (K-line slow init) and ISO 14230 (KWP2000 fast init). Transport-agnostic — pair with @emdzej/j2534-serial, @emdzej/j2534-usb, @emdzej/j2534-webserial or @emdzej/j2534-webusb.",
   "keywords": [
     "j2534",

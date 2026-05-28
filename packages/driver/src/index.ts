@@ -103,6 +103,14 @@ export class J2534Device {
   private nextPeriodicId = 1;
   private lastError = "";
   private firmwareVersion = "";
+  /**
+   * Per-device monotonic AT-command counter. Tactrix's reference DLL
+   * appends this to every command (atu / ato / ats / atg / att / …)
+   * as the trailing `<seq>` field; firmware uses it for request /
+   * response correlation. Wraps `0xFFFF → 1`, matching the reference
+   * (`*(int *)(param_1 + 0x7c) = ... + 1; if (0xffff < ...) reset to 1`).
+   */
+  private seqCounter = 0;
   private pollInterval: number;
 
   constructor(options: J2534Options) {
@@ -184,7 +192,7 @@ export class J2534Device {
       }
     }
 
-    const cmd = buildOpenChannelCmd(protocol as Protocol, flags, baudRate);
+    const cmd = buildOpenChannelCmd(protocol as Protocol, flags, baudRate, this.nextSeq());
     await this.transport.write(cmd);
     const resp = await this.readResponse();
     if (resp.type !== "ack") {
@@ -257,8 +265,14 @@ export class J2534Device {
     const ch = this.getChannel(channelId);
     let written = 0;
 
+    // J2534 spec: `Timeout` is in milliseconds. The firmware-bound
+    // `att` cmd takes microseconds. Convert here. `0` = use Tactrix's
+    // per-protocol default (1s for K-line), matching FUN_65ae7750 in
+    // the reference DLL.
+    const timeoutMicros = timeout > 0 ? timeout * 1000 : 1_000_000;
+
     for (const msg of msgs) {
-      const cmd = buildTransmitCmd(ch.channelByte, msg);
+      const cmd = buildTransmitCmd(ch.channelByte, msg, timeoutMicros, this.nextSeq());
       await this.transport.write(cmd);
       written++;
     }
@@ -296,7 +310,7 @@ export class J2534Device {
     // Start the software timer
     state.timer = setInterval(async () => {
       try {
-        const cmd = buildTransmitCmd(ch.channelByte, state.msg);
+        const cmd = buildTransmitCmd(ch.channelByte, state.msg, 1_000_000, this.nextSeq());
         await this.transport.write(cmd);
       } catch {
         // If write fails, stop the timer
@@ -476,7 +490,7 @@ export class J2534Device {
         const results: SConfig[] = [];
         for (const cfg of configs) {
           await this.transport.write(
-            buildGetConfigCmd(ch.channelByte, cfg.parameter)
+            buildGetConfigCmd(ch.channelByte, cfg.parameter, this.nextSeq())
           );
           const resp = await this.readResponse();
           if (resp.type === "config") {
@@ -491,7 +505,7 @@ export class J2534Device {
         const configs = input as SConfig[];
         for (const cfg of configs) {
           await this.transport.write(
-            buildSetConfigCmd(ch.channelByte, cfg.parameter, cfg.value)
+            buildSetConfigCmd(ch.channelByte, cfg.parameter, cfg.value, this.nextSeq())
           );
           // Consume the ack so it doesn't pollute the rx buffer
           await this.readResponse();
@@ -707,10 +721,25 @@ export class J2534Device {
     return protocol === Protocol.ISO9141 || protocol === Protocol.ISO14230;
   }
 
+  private nextSeq(): number {
+    this.seqCounter = (this.seqCounter + 1) & 0xffff;
+    if (this.seqCounter === 0) this.seqCounter = 1;
+    return this.seqCounter;
+  }
+
   private async pollOnce(ch: ChannelState, readTimeout = 1): Promise<void> {
     try {
       const buf = await this.transport.read(readTimeout);
       if (buf.length === 0) return;
+
+      // Diagnostic: dump raw bytes from device transport so we can see
+      // exactly what OpenPort is emitting (every packet type, including
+      // ones the K-line assembly later drops). Gated on env var so
+      // production callers don't get flooded.
+      if (typeof process !== "undefined" && process.env?.J2534_RAW_TRACE === "1") {
+        const hex = Array.from(buf).map((b) => b.toString(16).padStart(2, "0")).join(" ");
+        process.stderr.write(`[j2534-driver:raw] ${buf.length} bytes | ${hex}\n`);
+      }
 
       const responses = parseAllPackets(buf, ch.protocol as Protocol);
 

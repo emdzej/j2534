@@ -1,6 +1,6 @@
 {
   "name": "@emdzej/j2534-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Wire-level building blocks for the Tactrix OpenPort 2.0 J2534 protocol — AT-command encoder, response parser, and async message queue.",
   "keywords": [
     "j2534",

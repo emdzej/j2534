@@ -1,6 +1,6 @@
 {
   "name": "@emdzej/j2534-types",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "SAE J2534 PassThru API type definitions — Protocol, ConnectFlag, ConfigParam, FilterType, Pin, RxStatus enums plus result and message interfaces. Used by @emdzej/j2534-* packages.",
   "keywords": [
     "j2534",
