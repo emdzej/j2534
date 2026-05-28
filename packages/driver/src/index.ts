@@ -519,7 +519,20 @@ export class J2534Device {
           buildFiveBaudInitCmd(ch.channelByte, targetAddress)
         );
         // 5-baud init takes ~2 seconds (9 bits at 5 baud = 1800ms + response)
-        const resp = await this.readResponse(5000);
+        const debug = !!process.env.J2534_DEBUG;
+        let resp: DeviceResponse;
+        try {
+          const buf = await this.transport.read(5000);
+          if (debug) {
+            const hex = Array.from(buf).map((b) => b.toString(16).padStart(2, "0")).join(" ");
+            console.error(`[5baud] raw firmware response (${buf.length} bytes): ${hex}`);
+          }
+          resp = parseResponse(buf, ch.protocol as Protocol);
+        } catch (err) {
+          if (debug) console.error(`[5baud] read timed out: ${(err as Error).message}`);
+          throw this.setError(J2534Error.ERR_FAILED, "5-baud init: no response from firmware (timeout)");
+        }
+        if (debug) console.error(`[5baud] parsed:`, resp);
         if (resp.type === "fast_init") {
           return {
             protocolId: ch.protocol as Protocol,
@@ -531,7 +544,13 @@ export class J2534Device {
             data: resp.data,
           };
         }
-        throw this.setError(J2534Error.ERR_FAILED, "5-baud init failed or timed out");
+        if (resp.type === "error") {
+          throw this.setError(J2534Error.ERR_FAILED, `5-baud init: firmware returned error code ${resp.code}`);
+        }
+        throw this.setError(
+          J2534Error.ERR_FAILED,
+          `5-baud init: unexpected response type "${resp.type}"`
+        );
       }
 
       case IoctlId.FAST_INIT: {

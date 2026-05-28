@@ -257,6 +257,21 @@ async function main(): Promise<void> {
 
   console.log(chalk.green("MUT-II channel configured (15625/8N1)."));
 
+  // ─── Sanity: battery voltage on pin 16 ────────────────────────
+  // Without +12V on OBD-II pin 16 the OpenPort's K-line transceiver is
+  // unpowered and any init will silently fail.
+  try {
+    const vbatt = (await device.passThruIoctl(channelId, IoctlId.READ_VBATT)) as number;
+    const v = vbatt / 1000;
+    const tag = v < 11 ? chalk.red : v < 12 ? chalk.yellow : chalk.green;
+    console.log(tag(`Battery (pin 16): ${v.toFixed(2)} V`));
+    if (v < 9) {
+      console.log(chalk.red("  ⚠ Pin 16 has no/low voltage — connector unpowered. Check fuse/wiring."));
+    }
+  } catch (err) {
+    console.log(chalk.yellow(`Battery read failed: ${(err as Error).message}`));
+  }
+
   // ─── 5-baud init ─────────────────────────────────────────────
 
   console.log(chalk.cyan("\nPerforming 5-baud init (address 0x01)..."));
