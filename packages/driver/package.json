@@ -1,6 +1,36 @@
 {
   "name": "@emdzej/j2534-driver",
   "version": "0.1.0",
+  "description": "J2534Device — full SAE J2534 PassThru API implementation for Tactrix OpenPort 2.0. Supports CAN (11/29-bit), ISO 15765 (ISO-TP / UDS), ISO 9141 (K-line slow init) and ISO 14230 (KWP2000 fast init). Transport-agnostic — pair with @emdzej/j2534-serial, @emdzej/j2534-usb, @emdzej/j2534-webserial or @emdzej/j2534-webusb.",
+  "keywords": [
+    "j2534",
+    "passthru",
+    "obd",
+    "obd-ii",
+    "tactrix",
+    "openport",
+    "diagnostics",
+    "kwp2000",
+    "can",
+    "iso15765",
+    "iso9141",
+    "iso14230",
+    "uds",
+    "iso-tp",
+    "k-line",
+    "typescript"
+  ],
+  "homepage": "https://github.com/emdzej/j2534#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/emdzej/j2534.git",
+    "directory": "packages/driver"
+  },
+  "bugs": {
+    "url": "https://github.com/emdzej/j2534/issues"
+  },
+  "license": "MIT",
+  "author": "Michał Jaskólski",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -10,10 +40,20 @@
       "import": "./dist/index.js"
     }
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm run clean && pnpm run build"
   },
   "dependencies": {
     "@emdzej/j2534-core": "workspace:*",

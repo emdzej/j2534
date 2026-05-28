@@ -1,6 +1,34 @@
 {
   "name": "@emdzej/j2534-types",
   "version": "0.1.0",
+  "description": "SAE J2534 PassThru API type definitions — Protocol, ConnectFlag, ConfigParam, FilterType, Pin, RxStatus enums plus result and message interfaces. Used by @emdzej/j2534-* packages.",
+  "keywords": [
+    "j2534",
+    "passthru",
+    "obd",
+    "obd-ii",
+    "tactrix",
+    "openport",
+    "diagnostics",
+    "kwp2000",
+    "can",
+    "iso15765",
+    "iso9141",
+    "iso14230",
+    "typescript",
+    "types"
+  ],
+  "homepage": "https://github.com/emdzej/j2534#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/emdzej/j2534.git",
+    "directory": "packages/types"
+  },
+  "bugs": {
+    "url": "https://github.com/emdzej/j2534/issues"
+  },
+  "license": "MIT",
+  "author": "Michał Jaskólski",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -10,10 +38,20 @@
       "import": "./dist/index.js"
     }
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm run clean && pnpm run build"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

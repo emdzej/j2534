@@ -96,6 +96,49 @@ sudo pnpm --filter @emdzej/j2534-example-ds2 tui -- -u
 
 See [docs/API.md](docs/API.md) for the full API reference.
 
+## Publishing
+
+The seven `packages/*` are published to npm under the `@emdzej`
+scope. `apps/*` and `examples/*` are marked `private: true` and are
+intentionally not published.
+
+Each publishable package has:
+
+- `description`, `keywords`, `repository`, `homepage`, `bugs`, `author`,
+  `license` metadata
+- `files: ["dist", "README.md", "LICENSE"]` whitelist (source / tsconfig
+  / tests stay out of the tarball)
+- `publishConfig.access: "public"` (required for first publish of
+  scoped packages)
+- `prepublishOnly` that re-runs the clean + build before pack
+- `sideEffects: false` to enable bundler tree-shaking
+
+`workspace:*` dependency references are rewritten to concrete
+versions automatically by `pnpm publish`.
+
+### Dry-run
+
+```bash
+pnpm -r --filter "./packages/*" publish --dry-run --no-git-checks
+```
+
+### First publish
+
+```bash
+# log in once
+npm login
+
+# version bump (all-at-once, lockstep — recommended for the 0.x line)
+pnpm -r --filter "./packages/*" exec -- npm version <major|minor|patch>
+
+# publish all
+pnpm -r --filter "./packages/*" publish --no-git-checks
+```
+
+If you prefer independent per-package versions, switch to
+[changesets](https://github.com/changesets/changesets) — but for the
+current 0.x lockstep cadence the above is enough.
+
 ## License
 
 See [LICENSE](LICENSE).

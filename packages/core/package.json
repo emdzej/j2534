@@ -1,6 +1,31 @@
 {
   "name": "@emdzej/j2534-core",
   "version": "0.1.0",
+  "description": "Wire-level building blocks for the Tactrix OpenPort 2.0 J2534 protocol — AT-command encoder, response parser, and async message queue.",
+  "keywords": [
+    "j2534",
+    "passthru",
+    "obd",
+    "obd-ii",
+    "tactrix",
+    "openport",
+    "diagnostics",
+    "at-commands",
+    "parser",
+    "encoder",
+    "typescript"
+  ],
+  "homepage": "https://github.com/emdzej/j2534#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/emdzej/j2534.git",
+    "directory": "packages/core"
+  },
+  "bugs": {
+    "url": "https://github.com/emdzej/j2534/issues"
+  },
+  "license": "MIT",
+  "author": "Michał Jaskólski",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -10,10 +35,20 @@
       "import": "./dist/index.js"
     }
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm run clean && pnpm run build"
   },
   "dependencies": {
     "@emdzej/j2534-types": "workspace:*"
